@@ -81,4 +81,3 @@ Potential future enhancements:
 - Integration with real-time inventory systems
 - Conversion to standalone executable (.exe) for easier distribution
 - Web-based version for access from multiple devices
-# wh_grid_visualizer

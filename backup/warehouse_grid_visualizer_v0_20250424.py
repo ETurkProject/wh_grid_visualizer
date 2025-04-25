@@ -217,19 +217,9 @@ class WarehouseGridVisualizer:
         duplicate_btn = tk.Button(filter_frame, text="Duplicate SKUs", command=self.show_duplicate_skus)
         duplicate_btn.pack(side=tk.LEFT, padx=5, pady=5)
         
-        # Export button for Duplicate SKUs
-        export_duplicate_btn = tk.Button(filter_frame, text="Export Duplicates", 
-                                       command=self.export_duplicate_skus)
-        export_duplicate_btn.pack(side=tk.LEFT, padx=5, pady=5)
-        
         # Empty Bins button
         empty_bins_btn = tk.Button(filter_frame, text="Empty Bins", command=self.show_empty_bins)
         empty_bins_btn.pack(side=tk.LEFT, padx=5, pady=5)
-        
-        # Export button for Empty Bins
-        export_empty_btn = tk.Button(filter_frame, text="Export Empty", 
-                                   command=self.export_empty_bins)
-        export_empty_btn.pack(side=tk.LEFT, padx=5, pady=5)
         
         # Clear filter button
         clear_filter_btn = tk.Button(filter_frame, text="Clear Filter", command=self.clear_filter)
@@ -279,46 +269,40 @@ class WarehouseGridVisualizer:
     
     def update_canvas_dimensions(self):
         """Update canvas dimensions based on grid size"""
-        # For 90-degree rotated view, swap width/height calculations
-        total_width = self.header_width + (len(self.rows) * (self.cell_size + self.cell_padding))
-        total_height = self.header_height + (len(self.columns) * (self.cell_size + self.cell_padding))
+        total_width = self.header_width + (len(self.columns) * (self.cell_size + self.cell_padding))
+        total_height = self.header_height + (len(self.rows) * (self.cell_size + self.cell_padding))
         self.canvas.config(scrollregion=(0, 0, total_width, total_height))
     
     def draw_grid(self):
-        """Draw the warehouse grid on the canvas with 90-degree counter-clockwise rotation"""
+        """Draw the warehouse grid on the canvas"""
         # Clear canvas
         self.canvas.delete("all")
         
         # Store cell IDs and coordinates for later use
         self.cell_objects = {}
         
-        # In the rotated view:
-        # - What were columns now appear on the right side (vertical)
-        # - What were rows now appear on the top (horizontal) in reverse order (90 to 01)
-        
-        # Draw row headers (now across the top) in reverse order
-        for row_idx, row_name in enumerate(reversed(self.rows)):
-            x = self.header_width + row_idx * (self.cell_size + self.cell_padding)
+        # Draw column headers
+        for col_idx, col_name in enumerate(self.columns):
+            x = self.header_width + col_idx * (self.cell_size + self.cell_padding)
             self.canvas.create_rectangle(x, 0, x + self.cell_size, self.header_height, 
                                        fill="lightgray", outline="black")
             self.canvas.create_text(x + self.cell_size/2, self.header_height/2, 
-                                  text=row_name, font=("Arial", max(8, int(self.cell_size/4))))
+                                  text=col_name, font=("Arial", max(8, int(self.cell_size/4))))
         
-        # Draw column headers (now down the left side)
-        for col_idx, col_name in enumerate(self.columns):
-            y = self.header_height + col_idx * (self.cell_size + self.cell_padding)
+        # Draw row headers
+        for row_idx, row_name in enumerate(self.rows):
+            y = self.header_height + row_idx * (self.cell_size + self.cell_padding)
             self.canvas.create_rectangle(0, y, self.header_width, y + self.cell_size, 
                                        fill="lightgray", outline="black")
             self.canvas.create_text(self.header_width/2, y + self.cell_size/2, 
-                                  text=col_name, font=("Arial", max(8, int(self.cell_size/4))))
+                                  text=row_name, font=("Arial", max(8, int(self.cell_size/4))))
         
         # Draw grid cells
-        for col_idx, col_name in enumerate(self.columns):
-            y = self.header_height + col_idx * (self.cell_size + self.cell_padding)
+        for row_idx, row_name in enumerate(self.rows):
+            y = self.header_height + row_idx * (self.cell_size + self.cell_padding)
             
-            # Use reversed rows for the grid
-            for row_idx, row_name in enumerate(reversed(self.rows)):
-                x = self.header_width + row_idx * (self.cell_size + self.cell_padding)
+            for col_idx, col_name in enumerate(self.columns):
+                x = self.header_width + col_idx * (self.cell_size + self.cell_padding)
                 
                 # Determine if cell has items
                 has_items = col_name in self.grid_data and row_name in self.grid_data[col_name]
@@ -714,23 +698,24 @@ class WarehouseGridVisualizer:
         duplicate_skus = set()
         duplicate_locations = set()
         
-        # First pass: collect all bin locations for each SKU
+        # First, gather all the locations for each SKU
         for timestamp, sku, location in self.csv_data:
-            # Skip empty, EMPTY, or SKUs that aren't exactly 9 characters
-            if not sku.strip() or sku.upper() == "EMPTY" or len(sku) != 9:
+            # Skip invalid locations or empty/EMPTY SKUs
+            if (len(location) < 5 or not location.startswith('R') or 
+                sku.upper() == "EMPTY" or not sku.strip()):
                 continue
                 
-            if len(location) >= 5 and location.startswith('R'):
-                try:
-                    level = location[1:2]
-                    column_letter = location[2:3]
-                    row_num = location[3:5]
-                    
-                    column = level + column_letter
-                    sku_locations[sku].append((column, row_num))
-                except:
-                    # Skip invalid formats
-                    pass
+            # Extract grid coordinates
+            try:
+                level = location[1:2]
+                column_letter = location[2:3]
+                row_num = location[3:5]
+                
+                column = level + column_letter
+                sku_locations[sku].append((column, row_num))
+            except:
+                # Skip invalid formats
+                pass
         
         # Now find the SKUs that appear in multiple locations
         for sku, locations in sku_locations.items():
@@ -739,7 +724,7 @@ class WarehouseGridVisualizer:
                 duplicate_locations.update(locations)
                 
         return duplicate_locations
-    
+        
     def show_duplicate_skus(self):
         """Highlight grid cells with duplicate SKUs"""
         # Clear previous highlights
@@ -820,151 +805,6 @@ class WarehouseGridVisualizer:
         """Clear filter highlighting"""
         self.current_filter = None
         self.clear_search()
-
-    def export_duplicate_skus(self):
-        """Export duplicate SKUs to a CSV file"""
-        # Get all duplicate SKU data
-        duplicate_data = self.prepare_duplicate_skus_export()
-        
-        if not duplicate_data:
-            messagebox.showinfo("Export", "No duplicate SKUs found to export.")
-            return
-            
-        # Ask user where to save the file
-        file_path = filedialog.asksaveasfilename(
-            defaultextension=".csv",
-            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
-            title="Save Duplicate SKUs Export As"
-        )
-        
-        if not file_path:
-            return  # User cancelled
-            
-        try:
-            # Write to CSV
-            with open(file_path, 'w', newline='') as csvfile:
-                writer = csv.writer(csvfile)
-                writer.writerow(["SKU", "Bin Locations"])  # Header
-                
-                for sku, locations in duplicate_data:
-                    writer.writerow([sku, locations])
-                    
-            self.status_bar.config(text=f"Exported {len(duplicate_data)} duplicate SKUs to {file_path}")
-            
-            # Ask if user wants to open the file
-            if messagebox.askyesno("Export Complete", "Export completed successfully. Open the file now?"):
-                import os
-                os.startfile(file_path)
-                
-        except Exception as e:
-            messagebox.showerror("Export Error", f"Error exporting data: {str(e)}")
-    
-    def prepare_duplicate_skus_export(self):
-        """Prepare data for duplicate SKUs export"""
-        # Dictionary to store all locations for each SKU
-        sku_locations = defaultdict(list)
-        
-        # First pass: collect all bin locations for each SKU
-        for timestamp, sku, location in self.csv_data:
-            # Skip empty, EMPTY, or SKUs that aren't exactly 9 characters
-            if not sku.strip() or sku.upper() == "EMPTY" or len(sku) != 9:
-                continue
-                
-            if len(location) >= 5 and location.startswith('R'):
-                sku_locations[sku].append(location)
-        
-        # Second pass: filter to only keep duplicates and format for export
-        export_data = []
-        
-        for sku, locations in sku_locations.items():
-            if len(locations) > 1:  # It's a duplicate
-                # Sort locations for consistency
-                locations.sort()
-                # Join all locations with commas
-                locations_text = ", ".join(locations)
-                export_data.append((sku, locations_text))
-        
-        # Sort by SKU for easier reading
-        export_data.sort(key=lambda x: x[0])
-        
-        return export_data
-    
-    def export_empty_bins(self):
-        """Export empty bins to a CSV file"""
-        # Get all empty bin data
-        empty_bins_data = self.prepare_empty_bins_export()
-        
-        if not empty_bins_data:
-            messagebox.showinfo("Export", "No empty bins found to export.")
-            return
-            
-        # Ask user where to save the file
-        file_path = filedialog.asksaveasfilename(
-            defaultextension=".csv",
-            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
-            title="Save Empty Bins Export As"
-        )
-        
-        if not file_path:
-            return  # User cancelled
-            
-        try:
-            # Write to CSV
-            with open(file_path, 'w', newline='') as csvfile:
-                writer = csv.writer(csvfile)
-                writer.writerow(["Grid Location", "Bin Locations"])  # Header
-                
-                for grid_loc, bin_locations in empty_bins_data:
-                    writer.writerow([grid_loc, bin_locations])
-                    
-            self.status_bar.config(text=f"Exported {len(empty_bins_data)} empty bin locations to {file_path}")
-            
-            # Ask if user wants to open the file
-            if messagebox.askyesno("Export Complete", "Export completed successfully. Open the file now?"):
-                import os
-                os.startfile(file_path)
-                
-        except Exception as e:
-            messagebox.showerror("Export Error", f"Error exporting data: {str(e)}")
-    
-    def prepare_empty_bins_export(self):
-        """Prepare data for empty bins export"""
-        # Dictionary to store bin locations for each grid location
-        grid_locations = defaultdict(list)
-        
-        # Find all empty bins
-        for timestamp, sku, location in self.csv_data:
-            # Check if this is an empty bin
-            if sku.upper() == "EMPTY" or not sku.strip():
-                if len(location) >= 5 and location.startswith('R'):
-                    try:
-                        # Extract grid coordinates
-                        level = location[1:2]
-                        column_letter = location[2:3]
-                        row_num = location[3:5]
-                        
-                        grid_loc = f"{level}{column_letter}{row_num}"
-                        
-                        # Add this bin location to the appropriate grid location
-                        grid_locations[grid_loc].append(location)
-                    except:
-                        # Skip invalid formats
-                        continue
-        
-        # Format for export
-        export_data = []
-        
-        for grid_loc, bin_locations in grid_locations.items():
-            # Sort locations for consistency
-            bin_locations.sort()
-            # Join all locations with commas
-            locations_text = ", ".join(bin_locations)
-            export_data.append((grid_loc, locations_text))
-        
-        # Sort by grid location for easier reading
-        export_data.sort(key=lambda x: x[0])
-        
-        return export_data
 
 if __name__ == "__main__":
     root = tk.Tk()
