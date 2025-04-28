@@ -14,7 +14,8 @@ class WarehouseGridVisualizer:
                         '1N', '1O', '1P', '1Q', '1R', '1S', '1T', '1U', '1V', '1W', '1X', '1Y', '1Z', 
                         '2A', '2B', '2C', '2D', '2E', '2F', '2G', '2H', '2I', '2J', '2K', '2L', '2M', 
                         '2N', '2O', '2P', '2Q', '2R', '2S', '3A', '3B', '3C', '3D', '3E', '3F', '3G', 
-                        '3H', '3I', '3J', '3K', '3L', '3M', '3N', '3P', '3Q', '3R']
+                        '3H', '3I', '3J', '3K', '3L', '3M', '3N', '3P', '3Q', '3R', '3S', '3T', '3U', 
+                        '3V', '3W', '3X', '3Y', '3Z']
         self.rows = [str(i).zfill(2) for i in range(1, 91)]  # 01-90, zero-padded
         
         # Cell size (in pixels)
