@@ -206,12 +206,14 @@ class WarehouseGridVisualizerStreamlit:
                 st.session_state['duplicate_skus'].add(sku)
     
     def create_grid_visualization(self):
+        """Create grid visualization using Plotly"""
         # Create a grid using Plotly
         # First, create a data matrix for the heatmap
-        grid_values = np.zeros((len(self.columns), len(self.rows)))
+        grid_values = []
         
         # Populate the grid: 0 = empty, 1 = occupied, 2 = highlighted
         for col_idx, col_name in enumerate(self.columns):
+            row_values = []
             for row_idx, row_name in enumerate(self.rows):
                 # Check if cell has items
                 has_items = col_name in st.session_state['grid_data'] and row_name in st.session_state['grid_data'][col_name]
@@ -220,50 +222,42 @@ class WarehouseGridVisualizerStreamlit:
                 is_highlighted = (col_name, row_name) in st.session_state['highlighted_cells']
                 
                 if is_highlighted:
-                    grid_values[col_idx][row_idx] = 2  # Highlighted
+                    row_values.append(2)  # Highlighted
                 elif has_items:
-                    grid_values[col_idx][row_idx] = 1  # Occupied
+                    row_values.append(1)  # Occupied
                 else:
-                    grid_values[col_idx][row_idx] = 0  # Empty
+                    row_values.append(0)  # Empty
+            grid_values.append(row_values)
         
-        # Create a custom colorscale
-        colorscale = [[0, 'white'], [0.5, 'green'], [1, 'orange']]
+        # Create a simplified heatmap
+        fig = go.Figure()
         
-        # Create heatmap - fixed parameters for Plotly compatibility
-        fig = go.Figure(data=go.Heatmap(
+        # Add the heatmap trace with minimal parameters
+        fig.add_trace(go.Heatmap(
             z=grid_values,
-            x=self.rows,
-            y=self.columns,
-            colorscale=colorscale,
-            showscale=False,
-            hoverongaps=False,
-            hovertemplate='Column: %{y}<br>Row: %{x}<extra></extra>'
+            colorscale=[[0, 'white'], [0.5, 'green'], [1, 'orange']],
+            showscale=False
         ))
         
-        # Update layout
+        # Update layout with minimal configuration
         fig.update_layout(
-            title='Warehouse Grid',
-            xaxis=dict(
-                title='Row',
-                side='top',
-                autorange=False,
-                tickmode='array',
-                tickvals=list(range(len(self.rows))),
-                ticktext=self.rows
-            ),
-            yaxis=dict(
-                title='Column',
-                autorange='reversed',
-                tickmode='array',
-                tickvals=list(range(len(self.columns))),
-                ticktext=self.columns
-            ),
             height=800,
+            title='Warehouse Grid',
             margin=dict(l=50, r=50, t=100, b=50)
         )
         
-        # Use Streamlit's experimental feature to get clicked data
-        # Since Streamlit does not directly support callbacks from charts, we use a workaround
+        # Update axes with minimal configuration
+        fig.update_xaxes(
+            title='Row',
+            side='top',
+            showgrid=True
+        )
+        
+        fig.update_yaxes(
+            title='Column',
+            autorange='reversed',
+            showgrid=True
+        )
         
         # Select cell with a dropdown as a workaround for click events
         st.subheader("Select Cell")
