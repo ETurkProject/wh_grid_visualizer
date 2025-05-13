@@ -116,6 +116,7 @@ class WarehouseGridVisualizerStreamlit:
             # Display the grid visualization
             st.subheader("Warehouse Grid")
             fig = self.create_grid_visualization()
+            # Display the Plotly figure
             st.plotly_chart(fig, use_container_width=True)
             
             # Display selected cell details if a cell is clicked
@@ -206,51 +207,36 @@ class WarehouseGridVisualizerStreamlit:
     
     def create_grid_visualization(self):
         # Create a grid using Plotly
-        occupied_cells = {}
-        highlighted_cells = {}
+        # First, create a data matrix for the heatmap
+        grid_values = np.zeros((len(self.columns), len(self.rows)))
         
-        # Identify occupied and highlighted cells
+        # Populate the grid: 0 = empty, 1 = occupied, 2 = highlighted
         for col_idx, col_name in enumerate(self.columns):
             for row_idx, row_name in enumerate(self.rows):
+                # Check if cell has items
                 has_items = col_name in st.session_state['grid_data'] and row_name in st.session_state['grid_data'][col_name]
                 
-                # Create a unique cell identifier
-                cell_id = f"{col_name}-{row_name}"
+                # Check if cell is highlighted
+                is_highlighted = (col_name, row_name) in st.session_state['highlighted_cells']
                 
-                # Track if cell is occupied
-                occupied_cells[cell_id] = has_items
-                
-                # Track if cell is highlighted
-                highlighted_cells[cell_id] = (col_name, row_name) in st.session_state['highlighted_cells']
-        
-        # Create a heatmap-like grid
-        z = np.zeros((len(self.columns), len(self.rows)))
-        cell_text = [['' for _ in range(len(self.rows))] for _ in range(len(self.columns))]
-        
-        # Configure cell colors and text
-        for col_idx, col_name in enumerate(self.columns):
-            for row_idx, row_name in enumerate(self.rows):
-                cell_id = f"{col_name}-{row_name}"
-                
-                # Determine cell color (0 = white/empty, 1 = green/occupied, 2 = orange/highlighted)
-                if highlighted_cells[cell_id]:
-                    z[col_idx][row_idx] = 2  # Highlighted
-                elif occupied_cells[cell_id]:
-                    z[col_idx][row_idx] = 1  # Occupied
+                if is_highlighted:
+                    grid_values[col_idx][row_idx] = 2  # Highlighted
+                elif has_items:
+                    grid_values[col_idx][row_idx] = 1  # Occupied
                 else:
-                    z[col_idx][row_idx] = 0  # Empty
+                    grid_values[col_idx][row_idx] = 0  # Empty
         
         # Create a custom colorscale
         colorscale = [[0, 'white'], [0.5, 'green'], [1, 'orange']]
         
-        # Create heatmap
+        # Create heatmap - fixed parameters for Plotly compatibility
         fig = go.Figure(data=go.Heatmap(
-            z=z,
+            z=grid_values,
             x=self.rows,
             y=self.columns,
             colorscale=colorscale,
             showscale=False,
-            zhoverinfo='none',
+            hoverongaps=False,
             hovertemplate='Column: %{y}<br>Row: %{x}<extra></extra>'
         ))
         
@@ -260,30 +246,23 @@ class WarehouseGridVisualizerStreamlit:
             xaxis=dict(
                 title='Row',
                 side='top',
+                autorange=False,
                 tickmode='array',
                 tickvals=list(range(len(self.rows))),
-                ticktext=self.rows,
-                tickangle=0
+                ticktext=self.rows
             ),
             yaxis=dict(
                 title='Column',
+                autorange='reversed',
                 tickmode='array',
                 tickvals=list(range(len(self.columns))),
-                ticktext=self.columns,
-                autorange='reversed'  # To match the original visualization orientation
+                ticktext=self.columns
             ),
             height=800,
             margin=dict(l=50, r=50, t=100, b=50)
         )
         
-        # Add click event callback
-        fig.update_layout(clickmode='event')
-        
-        # Capture click events in Streamlit
-        st.plotly_chart(fig, use_container_width=True)
-        
         # Use Streamlit's experimental feature to get clicked data
-        # Note: This is a simplified way to handle clicks - in reality you'd need JavaScript for this
         # Since Streamlit does not directly support callbacks from charts, we use a workaround
         
         # Select cell with a dropdown as a workaround for click events
