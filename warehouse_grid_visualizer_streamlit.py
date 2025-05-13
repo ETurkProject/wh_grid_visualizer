@@ -41,6 +41,10 @@ class WarehouseGridVisualizerStreamlit:
         if 'current_filter' not in st.session_state:
             st.session_state['current_filter'] = None
             
+        # Grid visualization settings
+        if 'zoom_level' not in st.session_state:
+            st.session_state['zoom_level'] = 1.0  # Default zoom level
+            
     def run(self):
         st.title("Warehouse Grid Visualizer")
         
@@ -58,6 +62,22 @@ class WarehouseGridVisualizerStreamlit:
                     st.success(f"Data loaded successfully!")
                 except Exception as e:
                     st.error(f"Failed to load file: {str(e)}")
+            
+            # Zoom controls section
+            st.subheader("Zoom")
+            zoom_col1, zoom_col2, zoom_col3 = st.columns([1, 1, 2])
+            with zoom_col1:
+                if st.button("➕"):
+                    st.session_state['zoom_level'] = min(2.0, st.session_state['zoom_level'] + 0.1)
+                    st.experimental_rerun()
+            with zoom_col2:
+                if st.button("➖"):
+                    st.session_state['zoom_level'] = max(0.5, st.session_state['zoom_level'] - 0.1)
+                    st.experimental_rerun()
+            with zoom_col3:
+                if st.button("Fit to Window"):
+                    st.session_state['zoom_level'] = 1.0
+                    st.experimental_rerun()
             
             # Search section
             st.subheader("Search")
@@ -110,18 +130,40 @@ class WarehouseGridVisualizerStreamlit:
                         )
                     else:
                         st.warning("No empty bins found to export.")
+            
+            if st.button("Clear Filter"):
+                st.session_state['highlighted_cells'] = set()
+                st.session_state['current_filter'] = None
+                st.experimental_rerun()
         
         # Main content area
         if st.session_state['csv_data']:
             # Display the grid visualization
             st.subheader("Warehouse Grid")
-            fig = self.create_grid_visualization()
-            # Display the Plotly figure
-            st.plotly_chart(fig, use_container_width=True)
             
-            # Display selected cell details if a cell is clicked
-            if hasattr(st.session_state, 'selected_cell') and st.session_state.selected_cell:
-                column, row = st.session_state.selected_cell
+            # Display statistics above the grid
+            occupied_count = sum(1 for c in self.columns for r in self.rows 
+                              if c in st.session_state['grid_data'] and r in st.session_state['grid_data'][c])
+            total_cells = len(self.columns) * len(self.rows)
+            st.caption(f"Grid: {len(self.columns)}x{len(self.rows)} = {total_cells} cells, Occupied: {occupied_count}")
+            
+            # Create the grid visualization
+            fig = self.create_grid_visualization()
+            
+            # Display the Plotly figure
+            clicked_point = st.plotly_chart(fig, use_container_width=True, key="grid_chart")
+            
+            # Check if a cell was clicked
+            if fig.data[0].selectedpoints:
+                selected_idx = fig.data[0].selectedpoints[0]
+                row_idx = selected_idx % len(self.rows)
+                col_idx = selected_idx // len(self.rows)
+                
+                # Get column and row names
+                column = self.columns[col_idx]
+                row = self.rows[row_idx]
+                
+                # Show details for the clicked cell
                 self.show_grid_details(column, row)
         else:
             st.info("Upload a CSV file to visualize the warehouse grid.")
@@ -206,14 +248,13 @@ class WarehouseGridVisualizerStreamlit:
                 st.session_state['duplicate_skus'].add(sku)
     
     def create_grid_visualization(self):
-        """Create grid visualization using Plotly with labeled axes and bordered cells"""
-        # Create a grid using Plotly
-        # First, create a data matrix for the heatmap
-        grid_values = []
+        """Create grid visualization using Plotly with labeled axes, bordered cells, and click events"""
+        # Create a flat array for the heatmap to enable proper click event handling
+        grid_values_flat = []
+        hover_text = []
         
-        # Populate the grid: 0 = empty, 1 = occupied, 2 = highlighted
+        # Create hover text and values at the same time
         for col_idx, col_name in enumerate(self.columns):
-            row_values = []
             for row_idx, row_name in enumerate(self.rows):
                 # Check if cell has items
                 has_items = col_name in st.session_state['grid_data'] and row_name in st.session_state['grid_data'][col_name]
@@ -221,66 +262,86 @@ class WarehouseGridVisualizerStreamlit:
                 # Check if cell is highlighted
                 is_highlighted = (col_name, row_name) in st.session_state['highlighted_cells']
                 
+                # Set cell value based on state
                 if is_highlighted:
-                    row_values.append(2)  # Highlighted
+                    value = 2  # Highlighted
                 elif has_items:
-                    row_values.append(1)  # Occupied
+                    value = 1  # Occupied
                 else:
-                    row_values.append(0)  # Empty
-            grid_values.append(row_values)
+                    value = 0  # Empty
+                
+                grid_values_flat.append(value)
+                
+                # Create hover text
+                if has_items:
+                    items_count = len(st.session_state['grid_data'][col_name][row_name])
+                    hover_text.append(f"Location: {col_name}{row_name}<br>Items: {items_count}")
+                else:
+                    hover_text.append(f"Location: {col_name}{row_name}<br>Empty")
         
-        # Create a heatmap with named axes
+        # Apply current zoom level to figure dimensions
+        base_height = 800
+        base_width = 1200
+        height = base_height * st.session_state['zoom_level']
+        width = base_width * st.session_state['zoom_level']
+        
+        # Create a heatmap that allows cell selection
         fig = go.Figure()
         
-        # Add the heatmap with named axes
+        # Add the heatmap with flat array
         fig.add_trace(go.Heatmap(
-            z=grid_values,
-            x=self.rows,  # Row labels
-            y=self.columns,  # Column labels
+            z=grid_values_flat,
+            x=self.rows * len(self.columns),  # Repeat row labels for each column
+            y=[col for col in self.columns for _ in self.rows],  # Repeat each column label for all rows
             colorscale=[[0, 'white'], [0.5, 'green'], [1, 'orange']],
-            showscale=False
+            showscale=False,
+            hoverinfo='text',
+            text=hover_text,
+            # Enable selection
+            selectedpoints=[],
+            # Make cells clickable
+            customdata=list(range(len(grid_values_flat))),
         ))
         
         # Update layout to make cells square and add borders
         fig.update_layout(
-            height=800,
-            width=1200,  # Set width for better aspect ratio
+            height=height,
+            width=width,
             title='Warehouse Grid',
             margin=dict(l=50, r=50, t=100, b=50),
-            # Make cells square
+            # Make cells square and add borders
             yaxis=dict(
                 scaleanchor="x",
                 scaleratio=1,
                 title='Column',
-                autorange='reversed'
+                autorange='reversed',
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='black',
+                tickmode='array',
+                tickvals=self.columns,
+                ticktext=self.columns
             ),
-            # Add grid lines for cell borders
             xaxis=dict(
                 title='Row',
                 side='top',
                 showgrid=True,
                 gridwidth=1,
-                gridcolor='black'
-            )
+                gridcolor='black',
+                tickmode='array',
+                tickvals=self.rows,
+                ticktext=self.rows,
+                tickangle=-90
+            ),
+            # Add click functionality
+            clickmode='event+select'
         )
         
-        # Add visible borders by setting grid lines
-        fig.update_yaxes(
-            showgrid=True,
-            gridwidth=1,
-            gridcolor='black'
+        # Configure for a cleaner dashboard look
+        fig.update_layout(
+            plot_bgcolor='white',
+            paper_bgcolor='white',
         )
-        
-        # Select cell with a dropdown as a workaround for click events
-        st.subheader("Select Cell")
-        col1, col2 = st.columns(2)
-        with col1:
-            selected_column = st.selectbox("Column", self.columns)
-        with col2:
-            selected_row = st.selectbox("Row", self.rows)
-        
-        if st.button("View Cell Details"):
-            st.session_state.selected_cell = (selected_column, selected_row)
         
         return fig
     
