@@ -206,7 +206,7 @@ class WarehouseGridVisualizerStreamlit:
                 st.session_state['duplicate_skus'].add(sku)
     
     def create_grid_visualization(self):
-        """Create grid visualization using Plotly"""
+        """Create grid visualization using Plotly with labeled axes and bordered cells"""
         # Create a grid using Plotly
         # First, create a data matrix for the heatmap
         grid_values = []
@@ -229,34 +229,46 @@ class WarehouseGridVisualizerStreamlit:
                     row_values.append(0)  # Empty
             grid_values.append(row_values)
         
-        # Create a simplified heatmap
+        # Create a heatmap with named axes
         fig = go.Figure()
         
-        # Add the heatmap trace with minimal parameters
+        # Add the heatmap with named axes
         fig.add_trace(go.Heatmap(
             z=grid_values,
+            x=self.rows,  # Row labels
+            y=self.columns,  # Column labels
             colorscale=[[0, 'white'], [0.5, 'green'], [1, 'orange']],
             showscale=False
         ))
         
-        # Update layout with minimal configuration
+        # Update layout to make cells square and add borders
         fig.update_layout(
             height=800,
+            width=1200,  # Set width for better aspect ratio
             title='Warehouse Grid',
-            margin=dict(l=50, r=50, t=100, b=50)
+            margin=dict(l=50, r=50, t=100, b=50),
+            # Make cells square
+            yaxis=dict(
+                scaleanchor="x",
+                scaleratio=1,
+                title='Column',
+                autorange='reversed'
+            ),
+            # Add grid lines for cell borders
+            xaxis=dict(
+                title='Row',
+                side='top',
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='black'
+            )
         )
         
-        # Update axes with minimal configuration
-        fig.update_xaxes(
-            title='Row',
-            side='top',
-            showgrid=True
-        )
-        
+        # Add visible borders by setting grid lines
         fig.update_yaxes(
-            title='Column',
-            autorange='reversed',
-            showgrid=True
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='black'
         )
         
         # Select cell with a dropdown as a workaround for click events
