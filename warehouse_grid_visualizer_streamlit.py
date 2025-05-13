@@ -294,7 +294,7 @@ class WarehouseGridVisualizerStreamlit:
             z=grid_values,
             x=self.rows,
             y=self.columns,
-            colorscale=[[0, 'white'], [0.5, 'green'], [1, 'orange']],
+            colorscale=[[0, '#303030'], [0.5, '#50C878'], [1, '#FF8C00']],  # Darker empty cells, vibrant green and orange
             showscale=False,
             hoverinfo='text',
             text=hover_texts
@@ -313,31 +313,74 @@ class WarehouseGridVisualizerStreamlit:
                 title='Column',
                 autorange='reversed',
                 showgrid=True,
-                gridwidth=1,
-                gridcolor='black',
+                gridwidth=2,  # Thicker grid lines
+                gridcolor='#888888',  # Lighter gray for contrast
                 tickmode='array',
                 tickvals=self.columns,
-                ticktext=self.columns
+                ticktext=self.columns,
+                tickfont=dict(color='#FFFFFF'),  # White text for tick labels
+                title_font=dict(color='#FFFFFF')  # White text for axis title
             ),
             xaxis=dict(
                 title='Row',
                 side='top',
                 showgrid=True,
-                gridwidth=1,
-                gridcolor='black',
+                gridwidth=2,  # Thicker grid lines
+                gridcolor='#888888',  # Lighter gray for contrast
                 tickmode='array',
                 tickvals=self.rows,
                 ticktext=self.rows,
-                tickangle=-90
+                tickangle=-90,
+                tickfont=dict(color='#FFFFFF'),  # White text for tick labels
+                title_font=dict(color='#FFFFFF')  # White text for axis title
             ),
             clickmode='event+select'
         )
         
-        # Configure for a cleaner dashboard look
+        # Configure for dark theme
         fig.update_layout(
-            plot_bgcolor='white',
-            paper_bgcolor='white',
+            plot_bgcolor='#1E1E1E',  # Dark gray background
+            paper_bgcolor='#121212',  # Very dark gray paper
+            title_font=dict(color='#FFFFFF'),  # White title text
+            font=dict(color='#FFFFFF')  # White font for all other text
         )
+        
+        # Add grid shaping to ensure all cells have visible borders
+        shapes = []
+        
+        # Add vertical grid lines
+        for i in range(len(self.rows) + 1):
+            x_pos = i - 0.5 if i > 0 else i  # Adjust line position
+            shapes.append(
+                dict(
+                    type='line',
+                    xref='x',
+                    yref='paper',
+                    x0=x_pos,
+                    y0=0,
+                    x1=x_pos,
+                    y1=1,
+                    line=dict(color='#888888', width=1.5)
+                )
+            )
+        
+        # Add horizontal grid lines
+        for i in range(len(self.columns) + 1):
+            y_pos = i - 0.5 if i > 0 else i  # Adjust line position
+            shapes.append(
+                dict(
+                    type='line',
+                    xref='paper',
+                    yref='y',
+                    x0=0,
+                    y0=y_pos,
+                    x1=1,
+                    y1=y_pos,
+                    line=dict(color='#888888', width=1.5)
+                )
+            )
+        
+        fig.update_layout(shapes=shapes)
         
         return fig
     
