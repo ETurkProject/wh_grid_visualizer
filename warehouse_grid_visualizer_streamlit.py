@@ -69,15 +69,15 @@ class WarehouseGridVisualizerStreamlit:
             with zoom_col1:
                 if st.button("➕"):
                     st.session_state['zoom_level'] = min(2.0, st.session_state['zoom_level'] + 0.1)
-                    st.experimental_rerun()
+                    st.rerun()
             with zoom_col2:
                 if st.button("➖"):
                     st.session_state['zoom_level'] = max(0.5, st.session_state['zoom_level'] - 0.1)
-                    st.experimental_rerun()
+                    st.rerun()
             with zoom_col3:
                 if st.button("Fit to Window"):
                     st.session_state['zoom_level'] = 1.0
-                    st.experimental_rerun()
+                    st.rerun()
             
             # Search section
             st.subheader("Search")
@@ -95,46 +95,54 @@ class WarehouseGridVisualizerStreamlit:
                     # Reset search fields
                     st.session_state['sku_search'] = ""
                     st.session_state['loc_search'] = ""
-                    st.experimental_rerun()
+                    st.rerun()
             
             # Filter section
-            st.subheader("Filter")
+            st.subheader("Filter Options")
+            
+            # Filter buttons in uniform size
             filter_col1, filter_col2 = st.columns(2)
-            
             with filter_col1:
-                if st.button("Duplicate SKUs"):
+                if st.button("Duplicate SKUs", use_container_width=True):
                     self.show_duplicate_skus()
-                if st.button("Export Duplicates"):
-                    csv_data = self.prepare_duplicate_skus_export()
-                    if csv_data:
-                        st.download_button(
-                            label="Download CSV",
-                            data=self.convert_to_csv(csv_data, ["SKU", "Bin Locations"]),
-                            file_name="duplicate_skus.csv",
-                            mime="text/csv",
-                        )
-                    else:
-                        st.warning("No duplicate SKUs found to export.")
-            
             with filter_col2:
-                if st.button("Empty Bins"):
+                if st.button("Empty Bins", use_container_width=True):
                     self.show_empty_bins()
-                if st.button("Export Empty"):
-                    csv_data = self.prepare_empty_bins_export()
-                    if csv_data:
-                        st.download_button(
-                            label="Download CSV",
-                            data=self.convert_to_csv(csv_data, ["Grid Location", "Bin Locations"]),
-                            file_name="empty_bins.csv",
-                            mime="text/csv",
-                        )
-                    else:
-                        st.warning("No empty bins found to export.")
             
-            if st.button("Clear Filter"):
+            # Clear filter button with full width
+            if st.button("Clear Filter", use_container_width=True):
                 st.session_state['highlighted_cells'] = set()
                 st.session_state['current_filter'] = None
-                st.experimental_rerun()
+                st.rerun()
+            
+            # Export section (separate from filter)
+            st.subheader("Export Options")
+            export_col1, export_col2 = st.columns(2)
+            with export_col1:
+                csv_data = self.prepare_duplicate_skus_export()
+                if csv_data:
+                    st.download_button(
+                        label="Export Duplicates",
+                        data=self.convert_to_csv(csv_data, ["SKU", "Bin Locations"]),
+                        file_name="duplicate_skus.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+                else:
+                    st.button("Export Duplicates", disabled=True, use_container_width=True)
+            
+            with export_col2:
+                csv_data = self.prepare_empty_bins_export()
+                if csv_data:
+                    st.download_button(
+                        label="Export Empty",
+                        data=self.convert_to_csv(csv_data, ["Grid Location", "Bin Locations"]),
+                        file_name="empty_bins.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+                else:
+                    st.button("Export Empty", disabled=True, use_container_width=True)
         
         # Main content area
         if st.session_state['csv_data']:
@@ -150,8 +158,10 @@ class WarehouseGridVisualizerStreamlit:
             # Create the grid visualization
             fig = self.create_grid_visualization()
             
-            # Display the Plotly figure
-            clicked_point = st.plotly_chart(fig, use_container_width=True, key="grid_chart")
+            # Display the Plotly figure with fixed ratio
+            container = st.container()
+            with container:
+                clicked_point = plotly_chart = st.plotly_chart(fig, use_container_width=True, key="grid_chart")
             
             # Add cell selection interface below the grid
             st.subheader("Cell Details")
@@ -319,7 +329,8 @@ class WarehouseGridVisualizerStreamlit:
                 tickvals=self.columns,
                 ticktext=self.columns,
                 tickfont=dict(color='#FFFFFF'),  # White text for tick labels
-                title_font=dict(color='#FFFFFF')  # White text for axis title
+                title_font=dict(color='#FFFFFF'),  # White text for axis title
+                constrain='domain'  # This helps maintain aspect ratio
             ),
             xaxis=dict(
                 title='Row',
@@ -332,7 +343,10 @@ class WarehouseGridVisualizerStreamlit:
                 ticktext=self.rows,
                 tickangle=-90,
                 tickfont=dict(color='#FFFFFF'),  # White text for tick labels
-                title_font=dict(color='#FFFFFF')  # White text for axis title
+                title_font=dict(color='#FFFFFF'),  # White text for axis title
+                constrain='domain',  # This helps maintain aspect ratio
+                scaleanchor='y',
+                scaleratio=1
             ),
             clickmode='event+select'
         )
@@ -342,7 +356,9 @@ class WarehouseGridVisualizerStreamlit:
             plot_bgcolor='#1E1E1E',  # Dark gray background
             paper_bgcolor='#121212',  # Very dark gray paper
             title_font=dict(color='#FFFFFF'),  # White title text
-            font=dict(color='#FFFFFF')  # White font for all other text
+            font=dict(color='#FFFFFF'),  # White font for all other text
+            autosize=False,  # Prevent automatic resizing
+            uniformtext=dict(mode='hide', minsize=8)  # Ensure uniform text size
         )
         
         # Add grid shaping to ensure all cells have visible borders
