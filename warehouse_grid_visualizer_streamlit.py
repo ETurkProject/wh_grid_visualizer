@@ -153,18 +153,16 @@ class WarehouseGridVisualizerStreamlit:
             # Display the Plotly figure
             clicked_point = st.plotly_chart(fig, use_container_width=True, key="grid_chart")
             
-            # Check if a cell was clicked
-            if fig.data[0].selectedpoints:
-                selected_idx = fig.data[0].selectedpoints[0]
-                row_idx = selected_idx % len(self.rows)
-                col_idx = selected_idx // len(self.rows)
-                
-                # Get column and row names
-                column = self.columns[col_idx]
-                row = self.rows[row_idx]
-                
-                # Show details for the clicked cell
-                self.show_grid_details(column, row)
+            # Add cell selection interface below the grid
+            st.subheader("Cell Details")
+            col1, col2 = st.columns(2)
+            with col1:
+                selected_column = st.selectbox("Column", self.columns)
+            with col2:
+                selected_row = st.selectbox("Row", self.rows)
+            
+            if st.button("View Cell Details"):
+                self.show_grid_details(selected_column, selected_row)
         else:
             st.info("Upload a CSV file to visualize the warehouse grid.")
             
@@ -249,12 +247,14 @@ class WarehouseGridVisualizerStreamlit:
     
     def create_grid_visualization(self):
         """Create grid visualization using Plotly with labeled axes, bordered cells, and click events"""
-        # Create a flat array for the heatmap to enable proper click event handling
-        grid_values_flat = []
-        hover_text = []
+        # Create a matrix for the heatmap (this is the standard approach)
+        grid_values = []
+        hover_texts = []
         
-        # Create hover text and values at the same time
+        # Populate the grid: 0 = empty, 1 = occupied, 2 = highlighted
         for col_idx, col_name in enumerate(self.columns):
+            row_values = []
+            hover_row = []
             for row_idx, row_name in enumerate(self.rows):
                 # Check if cell has items
                 has_items = col_name in st.session_state['grid_data'] and row_name in st.session_state['grid_data'][col_name]
@@ -264,20 +264,21 @@ class WarehouseGridVisualizerStreamlit:
                 
                 # Set cell value based on state
                 if is_highlighted:
-                    value = 2  # Highlighted
+                    row_values.append(2)  # Highlighted
                 elif has_items:
-                    value = 1  # Occupied
+                    row_values.append(1)  # Occupied
                 else:
-                    value = 0  # Empty
-                
-                grid_values_flat.append(value)
+                    row_values.append(0)  # Empty
                 
                 # Create hover text
                 if has_items:
                     items_count = len(st.session_state['grid_data'][col_name][row_name])
-                    hover_text.append(f"Location: {col_name}{row_name}<br>Items: {items_count}")
+                    hover_row.append(f"Location: {col_name}{row_name}<br>Items: {items_count}")
                 else:
-                    hover_text.append(f"Location: {col_name}{row_name}<br>Empty")
+                    hover_row.append(f"Location: {col_name}{row_name}<br>Empty")
+            
+            grid_values.append(row_values)
+            hover_texts.append(hover_row)
         
         # Apply current zoom level to figure dimensions
         base_height = 800
@@ -285,22 +286,18 @@ class WarehouseGridVisualizerStreamlit:
         height = base_height * st.session_state['zoom_level']
         width = base_width * st.session_state['zoom_level']
         
-        # Create a heatmap that allows cell selection
+        # Create a heatmap with standard matrix structure
         fig = go.Figure()
         
-        # Add the heatmap with flat array
+        # Add the heatmap with named axes
         fig.add_trace(go.Heatmap(
-            z=grid_values_flat,
-            x=self.rows * len(self.columns),  # Repeat row labels for each column
-            y=[col for col in self.columns for _ in self.rows],  # Repeat each column label for all rows
+            z=grid_values,
+            x=self.rows,
+            y=self.columns,
             colorscale=[[0, 'white'], [0.5, 'green'], [1, 'orange']],
             showscale=False,
             hoverinfo='text',
-            text=hover_text,
-            # Enable selection
-            selectedpoints=[],
-            # Make cells clickable
-            customdata=list(range(len(grid_values_flat))),
+            text=hover_texts
         ))
         
         # Update layout to make cells square and add borders
@@ -333,7 +330,6 @@ class WarehouseGridVisualizerStreamlit:
                 ticktext=self.rows,
                 tickangle=-90
             ),
-            # Add click functionality
             clickmode='event+select'
         )
         
