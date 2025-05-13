@@ -103,17 +103,36 @@ class WarehouseGridVisualizer:
         
         with open(csv_file, 'r', newline='', encoding='utf-8') as file:
             reader = csv.reader(file)
-            next(reader)  # Skip header
             
+            # Read the header row to find column indices
+            headers = next(reader)
+            
+            # Find the indices of garment_sku and location_id columns (case insensitive)
+            sku_idx = None
+            location_idx = None
+            
+            for idx, header in enumerate(headers):
+                if header.lower() == "garment_sku":
+                    sku_idx = idx
+                elif header.lower() == "location_id":
+                    location_idx = idx
+            
+            # Verify we found the required columns
+            if sku_idx is None or location_idx is None:
+                raise ValueError("CSV file must contain 'garment_sku' and 'location_id' columns")
+            
+            # Process data rows
             for row in reader:
-                # Make sure we have enough columns
-                if len(row) < 3:
+                # Skip rows that don't have enough columns
+                if len(row) <= max(sku_idx, location_idx):
                     continue
-                    
-                timestamp, sku, location = row
                 
-                # Save all data for search functionality
-                self.csv_data.append((timestamp, sku, location))
+                # Extract sku and location values
+                sku = row[sku_idx]
+                location = row[location_idx]
+                
+                # Save data for search functionality (without timestamp)
+                self.csv_data.append((sku, location))
                 
                 # Extract grid location from bin location
                 # Example format: R1S32-N-AT1
@@ -381,16 +400,14 @@ class WarehouseGridVisualizer:
         tk.Label(frame, text=f"SKUs and Bins at Location {column}{row}", font=("Arial", 12, "bold")).pack(anchor=tk.W, pady=(0, 10))
         
         # Create treeview for displaying data
-        columns = ("SKU", "Bin Location", "Timestamp")
+        columns = ("SKU", "Bin Location")
         tree = ttk.Treeview(frame, columns=columns, show="headings")
         
         # Configure columns
         tree.heading("SKU", text="SKU")
         tree.heading("Bin Location", text="Bin Location")
-        tree.heading("Timestamp", text="Timestamp")
-        tree.column("SKU", width=150)
-        tree.column("Bin Location", width=200)
-        tree.column("Timestamp", width=150)
+        tree.column("SKU", width=200)
+        tree.column("Bin Location", width=300)
         
         # Add scrollbar
         scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=tree.yview)
@@ -408,14 +425,7 @@ class WarehouseGridVisualizer:
         if column in self.grid_data and row in self.grid_data[column]:
             # Find full details for each SKU at this location
             for idx, (sku, bin_location) in enumerate(self.grid_data[column][row]):
-                # Find the timestamp for this exact SKU/location
-                timestamp = ""
-                for t, s, loc in self.csv_data:
-                    if s == sku and loc == bin_location:
-                        timestamp = t
-                        break
-                
-                item_id = tree.insert("", tk.END, values=(sku, bin_location, timestamp))
+                item_id = tree.insert("", tk.END, values=(sku, bin_location))
                 
                 # Check if this item should be highlighted based on current filter
                 if self.current_filter == "duplicates" and sku in self.duplicate_skus:
@@ -429,7 +439,7 @@ class WarehouseGridVisualizer:
                     if sku_match or loc_match:
                         items_to_highlight.append(item_id)
         else:
-            tree.insert("", tk.END, values=("No items found", "", ""))
+            tree.insert("", tk.END, values=("No items found", ""))
         
         # Highlight items if needed
         for item_id in items_to_highlight:
@@ -454,12 +464,10 @@ class WarehouseGridVisualizer:
                                  command=lambda: self.copy_to_clipboard(details_window, item_values[0]))
             copy_menu.add_command(label="Copy Bin Location", 
                                  command=lambda: self.copy_to_clipboard(details_window, item_values[1]))
-            copy_menu.add_command(label="Copy Timestamp", 
-                                 command=lambda: self.copy_to_clipboard(details_window, item_values[2]))
             copy_menu.add_separator()
             copy_menu.add_command(label="Copy All", 
                                  command=lambda: self.copy_to_clipboard(details_window, 
-                                                                      f"SKU: {item_values[0]}\nBin: {item_values[1]}\nTimestamp: {item_values[2]}"))
+                                                                      f"SKU: {item_values[0]}\nBin: {item_values[1]}"))
             
             # Display the menu at the cursor position
             copy_menu.tk_popup(details_window.winfo_pointerx(), details_window.winfo_pointery())
@@ -480,8 +488,6 @@ class WarehouseGridVisualizer:
                              command=lambda: self.copy_column_value(tree, 0))
         popup_menu.add_command(label="Copy Bin Location", 
                              command=lambda: self.copy_column_value(tree, 1))
-        popup_menu.add_command(label="Copy Timestamp", 
-                             command=lambda: self.copy_column_value(tree, 2))
         popup_menu.add_separator()
         popup_menu.add_command(label="Copy Row", 
                              command=lambda: self.copy_row(tree))
@@ -539,7 +545,7 @@ class WarehouseGridVisualizer:
         if not item_values:
             return
         
-        # Format as SKU, Bin Location, Timestamp
+        # Format as SKU, Bin Location
         column_names = tree["columns"]
         text = "\n".join([f"{column_names[i]}: {value}" for i, value in enumerate(item_values)])
         
@@ -565,7 +571,7 @@ class WarehouseGridVisualizer:
         # Find matching locations
         matching_locations = set()
         
-        for timestamp, sku, location in self.csv_data:
+        for sku, location in self.csv_data:
             # Skip if location is too short
             if len(location) < 5:
                 continue
@@ -716,7 +722,7 @@ class WarehouseGridVisualizer:
         duplicate_locations = set()
         
         # First pass: collect all bin locations for each SKU
-        for timestamp, sku, location in self.csv_data:
+        for sku, location in self.csv_data:
             # Skip empty, EMPTY, or SKUs that aren't exactly 9 characters
             if not sku.strip() or sku.upper() == "EMPTY" or len(sku) != 9:
                 continue
@@ -770,7 +776,7 @@ class WarehouseGridVisualizer:
         """Find all locations with empty bins in the CSV data"""
         empty_bins = set()
         
-        for timestamp, sku, location in self.csv_data:
+        for sku, location in self.csv_data:
             # Skip invalid locations
             if len(location) < 5 or not location.startswith('R'):
                 continue
@@ -866,7 +872,7 @@ class WarehouseGridVisualizer:
         sku_locations = defaultdict(list)
         
         # First pass: collect all bin locations for each SKU
-        for timestamp, sku, location in self.csv_data:
+        for sku, location in self.csv_data:
             # Skip empty, EMPTY, or SKUs that aren't exactly 9 characters
             if not sku.strip() or sku.upper() == "EMPTY" or len(sku) != 9:
                 continue
@@ -934,7 +940,7 @@ class WarehouseGridVisualizer:
         grid_locations = defaultdict(list)
         
         # Find all empty bins
-        for timestamp, sku, location in self.csv_data:
+        for sku, location in self.csv_data:
             # Check if this is an empty bin
             if sku.upper() == "EMPTY" or not sku.strip():
                 if len(location) >= 5 and location.startswith('R'):
